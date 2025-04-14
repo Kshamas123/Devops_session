@@ -1,0 +1,184 @@
+
+ Docker - Drawbacks
+- Self-maintenance of containers is not provided.
+-Load balancer handling is not built-in.
+-Auto-scaling is not supported directly by Docker.
+
+---
+
+ Kubernetes (K8s)
+> A powerful container orchestration tool for managing containerized applications.
+
+History
+- Developed by Google, initially not open-source.
+- In **2014**, it was donated to the **Cloud Native Computing Foundation (CNCF)**.
+
+ Features (8 → "K8s")
+1. **Autoscaling** – Automatically scales resources up/down based on traffic.
+2. **Auto-healing** – Restores deleted/unhealthy resources automatically.
+3. **Load Balancing** – Distributes traffic equally across servers.
+4. **Platform Independent** – Works across different operating systems.
+5. **Rollbacks** – Revert to previous versions.
+6. **Health Monitoring** – Checks the status of containers.
+7. **Fault Tolerance** – Alerts when nodes fail or are deleted.
+8. **Orchestration** – Manages containerized objects efficiently.
+
+---
+
+ Kubernetes Architecture
+
+## **Cluster = Master Node + Worker Nodes**
+
+Master Node
+- **API Server** – Entry point for all commands.
+- **etcd** – Key-value store for cluster data.
+- **Controller Manager** – Sends instructions to API server.
+- **Scheduler** – Schedules pod placement and timing.
+
+ Worker Node
+- **Kubelet** – Creates and manages pods.
+- **Pods** – Smallest deployable unit (managed by kubelet).
+- **Container Engine** – Runs the containers (e.g., Docker).
+- **Kube-proxy** – Maintains network rules and communication.
+
+---
+
+Steps to Create a Kubernetes Cluster
+
+## Using EC2 Instance
+- Launch EC2 (Ubuntu, `t2.medium`, open SSH/HTTP, 25GB memory).
+- Connect:
+  ```bash
+  sudo su
+  apt update -y
+  ```
+
+ Install kubectl
+```bash
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl
+mkdir -p ~/.local/bin
+mv ./kubectl ~/.local/bin/kubectl
+kubectl version --client
+```
+
+Install eksctl
+```bash
+ARCH=amd64
+PLATFORM=$(uname -s)_$ARCH
+curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
+sudo mv /tmp/eksctl /usr/local/bin
+apt install unzip -y
+```
+
+ Install AWS CLI
+```bash
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+```
+
+Configure IAM Access Keys
+- Create IAM user → Attach **AdministratorAccess** policy → Create access key → Save `.csv`
+- In EC2 terminal:
+  ```bash
+  aws configure
+  ```
+
+---
+
+ Create Kubernetes Cluster with `eksctl`
+```bash
+eksctl create cluster \
+--name blue-cluster \
+--region sa-east-1 \
+--zone sa-east-1a,sa-east-1b \
+--nodegroup-name red-node \
+--node-type t2.medium \
+--nodes 2
+```
+> This takes about 10 minutes to spin up.
+
+---
+
+ Testing Commands
+```bash
+kubectl get nodes
+kubectl get namespace
+kubectl create namespace white
+kubectl get namespace
+```
+
+---
+
+YAML Configurations
+
+##Namespace (`blue.yaml`)
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: white-2
+```
+```bash
+kubectl apply -f blue.yaml
+kubectl get ns
+```
+
+---
+
+## Pod (`blue-pod.yaml`)
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: blue-pod2
+  namespace: white-2
+spec:
+  containers:
+    - name: c-1
+      image: daviddocker526/ipl
+      ports:
+        - containerPort: 80
+```
+```bash
+kubectl apply -f blue-pod.yaml
+kubectl get pods -n white-2
+kubectl describe pod blue-pod2 -n white-2
+```
+
+---
+
+# Replica Set (`white-replica.yaml`)
+Used to maintain the **desired state (number of pods)** and reduce downtime.
+
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: blue-replica1
+  namespace: white-2
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: ipl
+  template:
+    metadata:
+      labels:
+        app: ipl
+    spec:
+      containers:
+        - name: c-2
+          image: daviddocker526/ipl
+          ports:
+            - containerPort: 80
+```
+```bash
+kubectl apply -f white-replica.yaml
+kubectl get rs -n white-2
+kubectl get pods -n white-2
+```
+
