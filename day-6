@@ -1,0 +1,178 @@
+ Kubernetes Deployment & Service using YAML (Date: 03/04/2025)
+
+🔹 Deployment Configuration (Pod & ReplicaSet)
+```yaml
+# File: blue-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue-deploy
+  namespace: blue-ns
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: ipl
+  template:
+    metadata:
+      labels:
+        app: ipl
+    spec:
+      containers:
+        - name: c-1
+          image: daviddocker526/ipl-srh:latest
+          ports:
+            - containerPort: 80
+```
+
+ Steps:
+- `kubectl create ns blue-ns`
+- `vi blue-deployment.yaml` (Edit with `i`, save with `:wq`)
+- `kubectl apply -f blue-deployment.yaml`
+- `kubectl get deployment -n blue-ns`
+- `kubectl get rs -n blue-ns`
+- `kubectl get pods -n blue-ns`
+- `kubectl describe pod <pod-name> -n blue-ns`
+
+---
+
+🔹 Service Configuration
+```yaml
+# File: blue-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: blue-service
+  namespace: blue-ns
+spec:
+  selector:
+    app: ipl
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer
+```
+
+ Service Types:
+1. `ClusterIP`: Default; internal cluster access.
+2. `NodePort`: Exposes service on each node’s IP at a static port.
+3. `LoadBalancer`: Provides an external IP (not supported on Killercoda).
+4. `ExternalName`: Maps a service to a DNS name.
+
+Commands:
+- `kubectl apply -f blue-service.yaml`
+- `kubectl get all -n blue-ns`
+- (Killercoda won’t show external IP due to free tier)
+
+---
+
+## 🔹 Other Useful Commands:
+- `kubectl delete pod <pod-name> -n blue-ns`
+- To change replica count:
+  - Edit YAML → `replicas: 1`
+  - `kubectl apply -f blue-deployment.yaml`
+- Cleanup:
+  - `kubectl delete deployment blue-deploy -n blue-ns`
+  - `kubectl delete svc blue-service -n blue-ns`
+
+---
+
+ Jenkins for CI/CD Automation (EC2 Setup)
+
+🔹 EC2 Instance Setup
+- Launch EC2 (t3.medium, 20GB, default group)
+- Allow Port 22 (SSH)
+- Connect with PuTTY using IP and key pair
+- `sudo su`
+- `apt update -y`
+
+---
+
+🔹 Jenkins Installation on Ubuntu (LTS)
+```bash
+ Add Jenkins key and repo
+sudo wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+Install Jenkins
+sudo apt-get update
+sudo apt-get install jenkins -y
+
+Install Java
+sudo apt update
+sudo apt install openjdk-11-jdk -y
+java --version
+```
+
+Access Jenkins:
+- Start Jenkins service (`sudo systemctl start jenkins`)
+- Access via browser: `http://<EC2-IP>:8080`
+- Unlock Jenkins using:
+  - `cat /var/lib/jenkins/secrets/initialAdminPassword`
+- Install Suggested Plugins
+- Create First Admin User
+
+---
+
+ Jenkins Plugins (For Kubernetes Integration)
+Install the following plugins from **Manage Jenkins > Plugins**:
+1. AWS Credentials
+2. Kubernetes
+3. Kubernetes CLI
+4. Kubernetes Client API
+5. Kubernetes Credentials Provider
+6. Kubernetes Credentials
+7. Kubernetes :: Pipeline :: DevOps Steps
+
+---
+
+🔹 AWS Configuration for Jenkins
+- Generate AWS Access Keys from AWS console.
+- In Jenkins:
+  - Go to **Manage Jenkins > Credentials > Global**
+  - Add new **AWS Credentials** with ID, Secret Key, and description.
+
+---
+
+🔹 kubeconfig Setup for Jenkins
+- On Jenkins server:
+  - Install `kubectl`, `awscli`, and `unzip`
+  ```bash
+  sudo apt install unzip -y
+  sudo apt install awscli -y
+  aws configure  # Add AWS Access Keys and region
+  ```
+
+- Use EKS cluster name to get the kubeconfig:
+  ```bash
+  aws eks update-kubeconfig --region <region> --name <cluster-name>
+  ```
+
+- Switch to Jenkins user:
+  ```bash
+  sudo su - jenkins
+  aws configure  # Again provide AWS credentials here
+  ```
+
+- Save and add the generated `~/.kube/config` as a credential in Jenkins.
+
+---
+
+## 🔹 Jenkins Pipeline Setup
+1. Go to Jenkins Dashboard
+2. Click on **New Item → Pipeline**
+3. Add script (from Word document or Git repo)
+4. Use Git integration:
+   ```groovy
+   git url: 'https://github.com/user/repo.git'
+   ```
+5. Save and **Build Now**
+6. Check logs and build output.
+
+---
+
+## 🔹 Final Checks
+- Verify EKS cluster:
+  - `kubectl get all`
+- Use multiple pipeline stages to automate deployment of multiple components.
